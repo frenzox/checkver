@@ -1,0 +1,509 @@
+#!/bin/sh
+
+set -efu
+
+REQUIRED_COMMANDS="
+	[
+	command
+	echo
+	exit
+	getopts
+	grep
+	printf
+	sed
+	test
+"
+usage()
+{
+	echo "Usage: ${0} <version> <requirements,...>"
+	echo "Checks if the provided version fulfills the provided requirement(s)"
+	echo
+	echo "  version            Version string to test, semver compliant"
+	echo "  requirement        Comma separated requirements string"
+	echo
+	echo "Examples:"
+	echo "  checkver \"1.0.1\" \"1.0.0\""
+	echo "  checkver \"1.0.1\" \"^1.0.0\""
+	echo "  checkver \"2.2.1\" \"~2\""
+	echo "  checkver \"1.0.0\" \"=1.0.0\""
+	echo "  checkver \"1.0.0\" \">=1.0.0\""
+	echo "  checkver \"1.5.0\" \">1.0.0, <=2.0.0\""
+	echo
+	echo "Supported operators for the requirement string:"
+	echo " >, >=, <, <=, =, ~, ^"
+	echo
+	echo "The semantics for the check follow the one from Cargo:"
+	echo "https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#specifying-dependencies-from-cratesio"
+
+
+}
+
+_msg()
+{
+	_level="${1:?Missing argument to function}"
+	shift
+
+	if [ "${#}" -le 0 ]; then
+		echo "${_level}: No content for this message ..."
+		return
+	fi
+
+	echo "${_level}: ${*}"
+}
+
+e_err()
+{
+	_msg 'err' "${*}" >&2
+}
+
+e_warn()
+{
+	_msg 'warning' "${*}"
+}
+
+e_notice()
+{
+	_msg 'notice' "${*}"
+}
+
+check_requirements()
+{
+	for _cmd in ${REQUIRED_COMMANDS}; do
+		if ! _test_result="$(command -V "${_cmd}")"; then
+			_test_result_fail="${_test_result_fail:-}${_test_result}\n"
+		else
+			_test_result_pass="${_test_result_pass:-}${_test_result}\n"
+		fi
+	done
+
+	if [ -n "${_test_result_fail:-}" ]; then
+		e_err "Self-test failed, missing dependencies."
+		echo '======================================='
+		echo 'Passed tests:'
+		# shellcheck disable=SC2059  # Interpret \n from variable
+		printf "${_test_result_pass:-none\n}"
+		echo '---------------------------------------'
+		echo 'Failed tests:'
+		# shellcheck disable=SC2059  # Interpret \n from variable
+		printf "${_test_result_fail:-none\n}"
+		echo '======================================='
+		exit 1
+	fi
+}
+
+get_major()
+{
+	major=$(echo "${1}" | sed -rn 's@^([0-9]+|\*)(\.([0-9\*]+|\*))?(\.([0-9]+|\*))?$@\1@p')
+
+	printf "%s" "${major}"
+}
+
+get_minor()
+{
+	minor=$(echo "${1}" | sed -rn 's@^([0-9]+|\*)(\.([0-9\*]+|\*))?(\.([0-9]+|\*))?$@\3@p')
+
+	printf "%s" "${minor}"
+}
+
+get_patch()
+{
+	patch=$(echo "${1}" | sed -rn 's@^([0-9]+|\*)(\.([0-9\*]+|\*))?(\.([0-9]+|\*))?$@\5@p')
+
+	printf "%s" "${patch}"
+}
+
+get_requirement_op()
+{
+	op=$(echo "${1}" | sed -rn 's@^(=|[<>]=?|\^|~)([0-9]+)(\.([0-9]+))?(\.([0-9]+))?$@\1@p')
+
+	if [ -z "${op}" ] && echo "${1}" | grep -q "\*"; then
+		op="*"
+	fi
+
+	printf "%s" "${op}"
+}
+
+requirement_is_valid()
+{
+	if echo "${1}" | grep -qE '^(=|[<>]=?|\^|~)?[0-9]+(\.[0-9]+)?(\.[0-9]+)?$' || \
+	   echo "${1}" | grep -qE '^\*$' || \
+	   echo "${1}" | grep -qE '^[0-9]+\.\*$' || \
+	   echo "${1}" | grep -qE '^[0-9]+\.[0-9]+\.\*$'; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+version_is_valid()
+{
+	if echo "${1}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+matches_exact()
+{
+	ver="${1?}"
+	req="${2?}"
+
+	req_major=$(get_major "${req}")
+	ver_major=$(get_major "${ver}")
+
+	if [ "${req_major}" = "*" ]; then
+		return 0
+	fi
+
+	# shellcheck disable=SC2086  # We're comparing numbers.
+	if [ ${req_major} -ne ${ver_major} ]; then
+		return 1
+	fi
+
+	req_minor=$(get_minor "${req}")
+	ver_minor=$(get_minor "${ver}")
+
+	if [ "${req_minor}" = "*" ]; then
+		return 0
+	fi
+
+	if [ -n "${req_minor}" ]; then
+		# shellcheck disable=SC2086  # We're comparing numbers.
+		if [ ${req_minor} -ne ${ver_minor} ]; then
+			return 1
+		fi
+	fi
+
+	req_patch=$(get_patch "${req}")
+	ver_patch=$(get_patch "${ver}")
+
+	if [ "${req_patch}" = "*" ]; then
+		return 0
+	fi
+
+	if [ -n "${req_patch}" ]; then
+		# shellcheck disable=SC2086  # We're comparing numbers.
+		if [ ${req_patch} -ne ${ver_patch} ]; then
+			return 1
+		fi
+	fi
+
+	return 0
+}
+
+matches_greater()
+{
+	ver="${1?}"
+	req="${2?}"
+
+	ver_major=$(get_major "${ver}")
+	req_major=$(get_major "${req}")
+	# shellcheck disable=SC2086  # We're comparing numbers.
+	if [ ${req_major} -ne ${ver_major} ]; then
+		# shellcheck disable=SC2086  # We're comparing numbers.
+		if [ ${ver_major} -gt ${req_major} ]; then
+			return 0
+		else
+			return 1
+		fi
+	fi
+
+	ver_minor=$(get_minor "${ver}")
+	req_minor=$(get_minor "${req}")
+	if [ -z "${req_minor}" ]; then
+		return 1;
+	fi
+
+	# shellcheck disable=SC2086  # We're comparing numbers.
+	if [ ${ver_minor} -ne ${req_minor} ]; then
+		# shellcheck disable=SC2086  # We're comparing numbers.
+		if [ ${ver_minor} -gt ${req_minor} ]; then
+			return 0
+		else
+			return 1
+		fi
+	fi
+
+	ver_patch=$(get_patch "${ver}")
+	req_patch=$(get_patch "${req}")
+	if [ -z "${req_patch}" ]; then
+		return 1;
+	fi
+
+	# shellcheck disable=SC2086  # We're comparing numbers.
+	if [ ${ver_patch} -ne ${req_patch} ]; then
+		# shellcheck disable=SC2086  # We're comparing numbers.
+		if [ ${ver_patch} -gt ${req_patch} ]; then
+			return 0
+		else
+			return 1
+		fi
+	fi
+
+	return 1
+}
+
+matches_less()
+{
+	ver="${1?}"
+	req="${2?}"
+
+	ver_major=$(get_major "${ver}")
+	req_major=$(get_major "${req}")
+	# shellcheck disable=SC2086  # We're comparing numbers.
+	if [ ${req_major} -ne ${ver_major} ]; then
+		# shellcheck disable=SC2086  # We're comparing numbers.
+		if [ ${ver_major} -lt ${req_major} ]; then
+			return 0
+		else
+			return 1
+		fi
+	fi
+
+	ver_minor=$(get_minor "${ver}")
+	req_minor=$(get_minor "${req}")
+	if [ -z "${req_minor}" ]; then
+		return 1;
+	fi
+
+	# shellcheck disable=SC2086  # We're comparing numbers.
+	if [ ${ver_minor} -ne ${req_minor} ]; then
+		# shellcheck disable=SC2086  # We're comparing numbers.
+		if [ ${ver_minor} -lt ${req_minor} ]; then
+			return 0
+		else
+			return 1
+		fi
+	fi
+
+	ver_patch=$(get_patch "${ver}")
+	req_patch=$(get_patch "${req}")
+	if [ -z "${req_patch}" ]; then
+		return 1;
+	fi
+
+	# shellcheck disable=SC2086  # We're comparing numbers.
+	if [ ${ver_patch} -ne ${req_patch} ]; then
+		# shellcheck disable=SC2086  # We're comparing numbers.
+		if [ ${ver_patch} -lt ${req_patch} ]; then
+			return 0
+		else
+			return 1
+		fi
+	fi
+
+	return 1
+}
+
+matches_tilde()
+{
+	ver="${1?}"
+	req="${2?}"
+
+	ver_major=$(get_major "${ver}")
+	req_major=$(get_major "${req}")
+	# shellcheck disable=SC2086  # We're comparing numbers.
+	if [ ${req_major} -ne ${ver_major} ]; then
+		return 1
+	fi
+
+	ver_minor=$(get_minor "${ver}")
+	req_minor=$(get_minor "${req}")
+	if [ -z "${req_minor}" ]; then
+		return 0;
+	fi
+
+	# shellcheck disable=SC2086  # We're comparing numbers.
+	if [ ${ver_minor} -ne ${req_minor} ]; then
+		return 1
+	fi
+
+	ver_patch=$(get_patch "${ver}")
+	req_patch=$(get_patch "${req}")
+	if [ -z "${req_patch}" ]; then
+		return 0;
+	fi
+
+	# shellcheck disable=SC2086  # We're comparing numbers.
+	if [ ${ver_patch} -ne ${req_patch} ]; then
+		# shellcheck disable=SC2086  # We're comparing numbers.
+		if [ ${ver_patch} -gt ${req_patch} ]; then
+			return 0
+		else
+			return 1
+		fi
+	fi
+
+	return 0
+}
+
+matches_caret()
+{
+	ver="${1?}"
+	req="${2?}"
+
+	ver_major=$(get_major "${ver}")
+	req_major=$(get_major "${req}")
+	# shellcheck disable=SC2086  # We're comparing numbers.
+	if [ ${ver_major} -ne ${req_major} ]; then
+		return 1
+	fi
+
+	ver_minor=$(get_minor "${ver}")
+	req_minor=$(get_minor "${req}")
+	if [ -z "${req_minor}" ]; then
+		return 0;
+	fi
+
+	ver_patch=$(get_patch "${ver}")
+	req_patch=$(get_patch "${req}")
+	if [ -z "${req_patch}" ]; then
+		# shellcheck disable=SC2086  # We're comparing numbers.
+		if [ ${req_major} -gt 0 ]; then
+			# shellcheck disable=SC2086  # We're comparing numbers.
+			if [ ${ver_minor} -ge ${req_minor} ]; then
+				return 0
+			else
+				return 1
+			fi
+		else
+			# shellcheck disable=SC2086  # We're comparing numbers.
+			if [ ${ver_minor} -eq ${req_minor} ]; then
+				return 0
+			else
+				return 1
+			fi
+		fi
+	fi
+
+	# shellcheck disable=SC2086  # We're comparing numbers.
+	if [ ${req_major} -gt 0 ]; then
+		if [ ${ver_minor} -ne ${req_minor} ]; then
+			if [ ${ver_minor} -gt ${req_minor} ]; then
+				return 0
+			else
+				return 1
+			fi
+		elif [ ${ver_patch} -ne ${req_patch} ]; then
+			if [ ${ver_patch} -gt ${req_patch} ]; then
+				return 0
+			else
+				return 1
+			fi
+		fi
+	elif [ ${req_minor} -gt 0 ]; then
+		if [ ${ver_minor} -ne ${req_minor} ]; then
+			return 1
+		elif [ ${ver_patch} -ne ${req_patch} ]; then
+			if [ ${ver_patch} -gt ${req_patch} ]; then
+				return 0
+			else
+				return 1
+			fi
+		fi
+	elif [ ${ver_minor} -ne ${req_minor} ] || [ ${ver_patch} -ne ${req_patch} ]; then
+		return 1
+	fi
+
+	return 0
+}
+
+trim() {
+	var="${1?Missing input argument}"
+
+	var="${var#"${var%%[![:space:]]*}"}"
+	var="${var%"${var##*[![:space:]]}"}"
+
+	printf "%s" "${var}"
+}
+
+main()
+{
+	while getopts ':h;' _opts; do
+		case "${_opts}" in
+			h)
+				usage
+				exit 0
+				;;
+			*)
+				e_err "Invalid option: -${OPTARG}"
+				exit 1
+				;;
+		esac
+	done
+
+	check_requirements
+
+	version="${1:-}"
+
+	if ! version_is_valid "${version}"; then
+		e_err "Invalid version string"
+		usage
+		exit 1
+	fi
+
+	shift
+
+	IFS=","
+	# shellcheck disable=SC2068  # Split on commas. Globbing is disabled.
+	for cmp in ${@}; do
+		cmp="$(trim "${cmp}")"
+
+		if ! requirement_is_valid "${cmp}"; then
+			e_err "Invalid requirement: ${cmp}"
+			exit 1
+		fi
+
+		op=$(get_requirement_op "${cmp}")
+
+		if [ "$op" != "*" ]; then
+			requirement="${cmp##"${op}"}"
+		else
+			requirement="${cmp}"
+		fi
+
+		case "${op}" in
+			">=")
+				if ! matches_exact "${version}" "${requirement}" && \
+				   ! matches_greater "${version}" "${requirement}"; then
+					exit 1
+				fi
+				;;
+			"<=")
+				if ! matches_exact "${version}" "${requirement}" && \
+				   ! matches_less "${version}" "${requirement}"; then
+					exit 1
+				fi
+				;;
+			">")
+				if ! matches_greater "${version}" "${requirement}"; then
+					exit 1
+				fi
+				;;
+			"<")
+				if ! matches_less "${version}" "${requirement}"; then
+					exit 1
+				fi
+				;;
+			"="|"*")
+				if ! matches_exact "${version}" "${requirement}"; then
+					exit 1
+				fi
+				;;
+			"~")
+				if ! matches_tilde "${version}" "${requirement}"; then
+					exit 1
+				fi
+				;;
+			"^"|"")
+				if ! matches_caret "${version}" "${requirement}"; then
+					exit 1
+				fi
+				;;
+		esac
+
+	done
+}
+
+main "${@}"

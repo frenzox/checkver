@@ -1,0 +1,25 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Lint
+      uses: ludeeus/action-shellcheck@master
+
+  test:
+
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Test
+      uses: sudo-bot/action-shunit2@latest
+      with:
+        cli: "./tests/checkver.sh"
