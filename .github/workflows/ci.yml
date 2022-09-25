@@ -12,6 +12,8 @@ jobs:
 
     - name: Lint
       uses: ludeeus/action-shellcheck@master
+      with:
+        additional_files: "checkver"
 
   test:
 
@@ -22,4 +24,4 @@ jobs:
     - name: Test
       uses: sudo-bot/action-shunit2@latest
       with:
-        cli: "./tests/checkver.sh"
+        cli: "./tests/checkver"
