@@ -11,9 +11,14 @@ TODO
 See examples from `checkver -h`:
 
 ```
-Usage: ./checkver.sh <version> <requirements,...>
+Usage: ./checkver.sh [OPTION] <version> <requirements,...>
 Checks if the provided version fulfills the provided requirement(s)
 
+Options:
+  -h                 Display this help and exit
+  -V                 Output version information and exit
+
+Positional arguments:
   version            Version string to test, semver compliant
   requirement        Comma separated requirements string
 
