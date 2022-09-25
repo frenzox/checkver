@@ -4,14 +4,25 @@ POSIX shell script that checks whether the provided version fulfills the provide
 
 ## Installation
 
-TODO
+```
+# Download the script and save it to /usr/local/bin
+wget -O /usr/local/bin/checkver https://raw.githubusercontent.com/frenzox/checkver/master/src/checkver
+
+# Make script executable
+chmod +x /usr/local/bin/checkver
+
+# Prove it works
+checkver -V
+```
+
+You probably want to make sure the directory where you install `checkver` to is included in your `PATH`.
 
 ## Usage
 
 See examples from `checkver -h`:
 
 ```
-Usage: ./checkver.sh [OPTION] <version> <requirements,...>
+Usage: checkver [OPTION] <version> <requirements,...>
 Checks if the provided version fulfills the provided requirement(s)
 
 Options:
