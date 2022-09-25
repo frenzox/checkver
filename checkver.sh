@@ -15,9 +15,14 @@ REQUIRED_COMMANDS="
 "
 usage()
 {
-	echo "Usage: ${0} <version> <requirements,...>"
+	echo "Usage: ${0} [OPTION] <version> <requirements,...>"
 	echo "Checks if the provided version fulfills the provided requirement(s)"
 	echo
+	echo "Options:"
+	echo "  -h                 Display this help and exit"
+	echo "  -V                 Output version information and exit"
+	echo
+	echo "Positional arguments:"
 	echo "  version            Version string to test, semver compliant"
 	echo "  requirement        Comma separated requirements string"
 	echo
@@ -420,10 +425,14 @@ trim() {
 
 main()
 {
-	while getopts ':h;' _opts; do
+	while getopts ':hV' _opts; do
 		case "${_opts}" in
 			h)
 				usage
+				exit 0
+				;;
+			V)
+				echo "$(basename "${0}") v0.1.0"
 				exit 0
 				;;
 			*)
