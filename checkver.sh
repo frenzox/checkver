@@ -212,7 +212,7 @@ matches_greater()
 	ver_minor=$(get_minor "${ver}")
 	req_minor=$(get_minor "${req}")
 	if [ -z "${req_minor}" ]; then
-		return 1;
+		return 1
 	fi
 
 	# shellcheck disable=SC2086  # We're comparing numbers.
@@ -228,7 +228,7 @@ matches_greater()
 	ver_patch=$(get_patch "${ver}")
 	req_patch=$(get_patch "${req}")
 	if [ -z "${req_patch}" ]; then
-		return 1;
+		return 1
 	fi
 
 	# shellcheck disable=SC2086  # We're comparing numbers.
@@ -264,7 +264,7 @@ matches_less()
 	ver_minor=$(get_minor "${ver}")
 	req_minor=$(get_minor "${req}")
 	if [ -z "${req_minor}" ]; then
-		return 1;
+		return 1
 	fi
 
 	# shellcheck disable=SC2086  # We're comparing numbers.
@@ -280,7 +280,7 @@ matches_less()
 	ver_patch=$(get_patch "${ver}")
 	req_patch=$(get_patch "${req}")
 	if [ -z "${req_patch}" ]; then
-		return 1;
+		return 1
 	fi
 
 	# shellcheck disable=SC2086  # We're comparing numbers.
@@ -311,7 +311,7 @@ matches_tilde()
 	ver_minor=$(get_minor "${ver}")
 	req_minor=$(get_minor "${req}")
 	if [ -z "${req_minor}" ]; then
-		return 0;
+		return 0
 	fi
 
 	# shellcheck disable=SC2086  # We're comparing numbers.
@@ -322,7 +322,7 @@ matches_tilde()
 	ver_patch=$(get_patch "${ver}")
 	req_patch=$(get_patch "${req}")
 	if [ -z "${req_patch}" ]; then
-		return 0;
+		return 0
 	fi
 
 	# shellcheck disable=SC2086  # We're comparing numbers.
@@ -353,7 +353,7 @@ matches_caret()
 	ver_minor=$(get_minor "${ver}")
 	req_minor=$(get_minor "${req}")
 	if [ -z "${req_minor}" ]; then
-		return 0;
+		return 0
 	fi
 
 	ver_patch=$(get_patch "${ver}")
@@ -455,9 +455,9 @@ main()
 			exit 1
 		fi
 
-		op=$(get_requirement_op "${cmp}")
+		op="$(get_requirement_op "${cmp}")"
 
-		if [ "$op" != "*" ]; then
+		if [ "${op}" != "*" ]; then
 			requirement="${cmp##"${op}"}"
 		else
 			requirement="${cmp}"
