@@ -6,7 +6,7 @@ POSIX shell script that checks whether the provided version fulfills the provide
 
 ```
 # Download the script and save it to /usr/local/bin
-wget -O /usr/local/bin/checkver https://raw.githubusercontent.com/frenzox/checkver/master/src/checkver
+wget -O /usr/local/bin/checkver https://raw.githubusercontent.com/frenzox/checkver/main/checkver
 
 # Make script executable
 chmod +x /usr/local/bin/checkver
